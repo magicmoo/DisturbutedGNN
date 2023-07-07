@@ -1,6 +1,6 @@
 from ogb.nodeproppred import DglNodePropPredDataset, Evaluator
-from util.util import try_gpu, Stochastic_run_graph
 from util.model import StochasticSAGE, StochasticGATNet
+from util.multiWorker import multi_Stochastic_run_graph
 import torch
 import dgl
 import dgl.nn as dglnn
@@ -18,7 +18,7 @@ graph, labels = dataset[0]
 graph = graph.remove_self_loop().add_self_loop()
 
 
-num_epochs, num_hidden, num_layers, dropout, lr = 20, 256, 2, 0.5, 0.001
+num_epochs, num_hidden, num_layers, dropout, lr = 100, 256, 2, 0.5, 0.001
 
 node_features = graph.ndata['feat']
 
@@ -26,12 +26,14 @@ node_features = graph.ndata['feat']
 # node_features[:, r:] = 0
 
 num_input, num_output = node_features.shape[1], int(labels.max().item()+1)
-Model = StochasticSAGE(num_input, num_hidden, num_output, num_layers, dropout)
-Model2 = StochasticSAGE(num_input, num_hidden, num_output, num_layers, dropout)
 # Model = StochasticGATNet(num_input, num_hidden, num_output, num_layers, 4, dropout)
-Opt = torch.optim.AdamW(Model.parameters(), lr=lr)
 Loss = F.nll_loss
 
+models, opts = [], []
+num_workers = 16
+for i in range(num_workers):
+    models.append(StochasticSAGE(num_input, num_hidden, num_output, num_layers, dropout))
+    opts.append(torch.optim.AdamW(models[-1].parameters(), lr=lr))
 
 sampler = dgl.dataloading.MultiLayerNeighborSampler([15, 10])
 dataloader = dgl.dataloading.DataLoader(
@@ -42,4 +44,8 @@ dataloader = dgl.dataloading.DataLoader(
     num_workers=0)
 
 
-loss_list, train_acc, valid_acc, test_acc = Stochastic_run_graph(graph, labels, dataloader, split_idx, evaluator, num_epochs, Model, Loss, Opt, True)
+loss_list, train_acc, valid_acc, test_acc = multi_Stochastic_run_graph(graph, labels, dataloader, split_idx, evaluator, num_epochs, models, Loss, opts, True)
+print("----------------------------")
+print(f'train_acc: {train_acc:.2}')
+print(f'valid_acc: {valid_acc:.2}')
+print(f'test_acc: {test_acc:.2}') 

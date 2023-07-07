@@ -26,11 +26,13 @@ node_features = graph.ndata['feat']
 # node_features[:, r:] = 0
 
 num_input, num_output = node_features.shape[1], int(labels.max().item()+1)
-Model = StochasticSAGE(num_input, num_hidden, num_output, num_layers, dropout)
-# Model = StochasticGATNet(num_input, num_hidden, num_output, num_layers, 4, dropout)
+# Model = StochasticSAGE(num_input, num_hidden, num_output, num_layers, dropout)
+Model = StochasticGATNet(num_input, num_hidden, num_output, num_layers, 4, dropout)
 Opt = torch.optim.AdamW(Model.parameters(), lr=lr)
 Loss = F.nll_loss
 
+split_ratio = 1/16
+node_features[:, int(split_ratio*num_input):] = 0
 
 sampler = dgl.dataloading.MultiLayerNeighborSampler([15, 10])
 dataloader = dgl.dataloading.DataLoader(
@@ -41,8 +43,12 @@ dataloader = dgl.dataloading.DataLoader(
     num_workers=0)
 
 plt.xlabel('epoch')
-plt.ylabel('train_acc')
+plt.ylabel('loss')
 pltx = [epoch+1 for epoch in range(num_epochs)]
 loss_list, train_acc, valid_acc, test_acc = Stochastic_run_graph(graph, labels, dataloader, split_idx, evaluator, num_epochs, Model, Loss, Opt, True)
 plt.plot(pltx, loss_list)
-plt.savefig('../image/train.jpg')
+plt.savefig('./image/train.jpg')
+print("----------------------------")
+print(f'train_acc: {train_acc:.2}')
+print(f'valid_acc: {valid_acc:.2}')
+print(f'test_acc: {test_acc:.2}') 

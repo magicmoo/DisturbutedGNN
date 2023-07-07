@@ -5,7 +5,6 @@ import dgl
 import dgl.nn as dglnn
 import torch.nn as nn
 import torch.nn.functional as F
-import util.util as util
 import matplotlib.pyplot as plt
 
 d_name = 'ogbn-arxiv'
@@ -31,4 +30,4 @@ plt.ylabel('train_acc')
 pltx = [epoch+1 for epoch in range(num_epochs)]
 loss_list, train_acc, valid_acc, test_acc = run_graph(graph, labels, split_idx, evaluator, num_epochs, Model, Loss, Opt, True)
 plt.plot(pltx, loss_list)
-plt.savefig('../image/train.jpg')
+plt.savefig('./image/train.jpg')

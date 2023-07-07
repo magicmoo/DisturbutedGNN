@@ -1,5 +1,5 @@
 from ogb.nodeproppred import DglNodePropPredDataset, Evaluator
-from util.util import try_gpu, run_graph
+from util.util import try_gpu, Stochastic_run_graph
 from util.model import StochasticSAGE, StochasticGATNet
 import torch
 import dgl
@@ -8,7 +8,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import util.util as util
 import matplotlib.pyplot as plt
-from util.multiWorker import avgModel
 
 d_name = 'ogbn-products'
 dataset = DglNodePropPredDataset(name = d_name)
@@ -16,23 +15,45 @@ evaluator = Evaluator(name = d_name)
 split_idx = dataset.get_idx_split()
 graph, labels = dataset[0]
 # graph.add_edges(*graph.all_edges()[::-1])
-# graph = graph.remove_self_loop().add_self_loop()
+graph = graph.remove_self_loop().add_self_loop()
 
 
-num_epochs, num_hidden, num_layers, dropout, lr, batch_size = 500, 256, 3, 0.5, 0.005, 1024
+num_epochs, num_hidden, num_layers, dropout, lr = 20, 256, 2, 0.5, 0.001
 
 node_features = graph.ndata['feat']
 
+# r = int(node_features.shape[-1] * 0.25)
+# node_features[:, r:] = 0
+
 num_input, num_output = node_features.shape[1], int(labels.max().item()+1)
 Model = StochasticSAGE(num_input, num_hidden, num_output, num_layers, dropout)
+# Model = StochasticGATNet(num_input, num_hidden, num_output, num_layers, 4, dropout)
+Opt = torch.optim.AdamW(Model.parameters(), lr=lr)
+Loss = F.nll_loss
 
-Model2 = StochasticSAGE(num_input, num_hidden, num_output, num_layers, dropout)
-# Model = GATNet(num_input, num_hidden, num_output, num_layers, 4, dropout).to(util.try_gpu())
 
-params = list(Model.parameters())
-params2 = list(Model2.parameters())
+sampler = dgl.dataloading.MultiLayerNeighborSampler([15, 10])
+dataloader = dgl.dataloading.DataLoader(
+    graph, split_idx['train'], sampler,
+    batch_size=1024,
+    shuffle=True,
+    drop_last=False,
+    num_workers=0)
 
-params[-1].requires_grad = False
-params[-1][:] = 114514
+_, _, blocks = next(iter(dataloader))
 
-avgModel([Model, Model2])
+num_workers, num_features = 2, graph.ndata['feat'].shape[-1]
+split_list = [0]
+for i in range(num_workers):
+    split_list.append(split_list[-1] + (num_features//num_workers))
+    if i < num_features%num_workers:
+        split_list[-1] += 1
+
+print(num_input)
+# for i in range(2):
+#     for j, block in enumerate(blocks):
+#         block.srcdata['feat'][:, :] = 0
+#         block.srcdata['feat'][:, split_list[i]:split_list[i+1]] = tmp_blocks[j].srcdata['feat'][:, split_list[i]:split_list[i+1]]
+#         print(block.srcdata['feat'])
+#         print(tmp_blocks[j].srcdata['feat'])
+#     break
