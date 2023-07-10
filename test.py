@@ -42,14 +42,11 @@ dataloader = dgl.dataloading.DataLoader(
 
 _, _, blocks = next(iter(dataloader))
 
-num_workers, num_features = 2, graph.ndata['feat'].shape[-1]
-split_list = [0]
-for i in range(num_workers):
-    split_list.append(split_list[-1] + (num_features//num_workers))
-    if i < num_features%num_workers:
-        split_list[-1] += 1
 
-print(num_input)
+print(blocks[0].srcdata['feat'])
+blocks[0].srcdata['feat'][0, 0] = 111
+print(blocks[0].srcdata['feat'])
+print(node_features[blocks[0].srcdata['_ID'][0], 0])
 # for i in range(2):
 #     for j, block in enumerate(blocks):
 #         block.srcdata['feat'][:, :] = 0

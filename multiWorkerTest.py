@@ -18,7 +18,7 @@ graph, labels = dataset[0]
 graph = graph.remove_self_loop().add_self_loop()
 
 
-num_epochs, num_hidden, num_layers, dropout, lr = 100, 256, 2, 0.5, 0.001
+num_epochs, num_hidden, num_layers, dropout, lr = 50, 256, 2, 0.5, 0.001
 
 node_features = graph.ndata['feat']
 
@@ -30,7 +30,7 @@ num_input, num_output = node_features.shape[1], int(labels.max().item()+1)
 Loss = F.nll_loss
 
 models, opts = [], []
-num_workers = 16
+num_workers = 4
 for i in range(num_workers):
     models.append(StochasticSAGE(num_input, num_hidden, num_output, num_layers, dropout))
     opts.append(torch.optim.AdamW(models[-1].parameters(), lr=lr))
@@ -43,9 +43,11 @@ dataloader = dgl.dataloading.DataLoader(
     drop_last=False,
     num_workers=0)
 
+plt.xlabel('epoch')
+plt.ylabel('test_acc')
 
-loss_list, train_acc, valid_acc, test_acc = multi_Stochastic_run_graph(graph, labels, dataloader, split_idx, evaluator, num_epochs, models, Loss, opts, True)
-print("----------------------------")
-print(f'train_acc: {train_acc:.2}')
-print(f'valid_acc: {valid_acc:.2}')
-print(f'test_acc: {test_acc:.2}') 
+loss_list, train_list, valid_list, test_list = multi_Stochastic_run_graph(graph, labels, dataloader, split_idx, evaluator, num_epochs, models, Loss, opts, 2, True)
+pltx = [iteration+1 for iteration in range(test_list.__len__())]
+
+plt.plot(pltx, test_list)
+plt.savefig('./image/train.jpg')

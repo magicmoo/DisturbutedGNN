@@ -31,8 +31,6 @@ Model = StochasticGATNet(num_input, num_hidden, num_output, num_layers, 4, dropo
 Opt = torch.optim.AdamW(Model.parameters(), lr=lr)
 Loss = F.nll_loss
 
-split_ratio = 1/16
-node_features[:, int(split_ratio*num_input):] = 0
 
 sampler = dgl.dataloading.MultiLayerNeighborSampler([15, 10])
 dataloader = dgl.dataloading.DataLoader(
