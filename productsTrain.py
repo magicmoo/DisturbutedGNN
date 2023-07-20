@@ -18,7 +18,7 @@ graph, labels = dataset[0]
 graph = graph.remove_self_loop().add_self_loop()
 
 
-num_epochs, num_hidden, num_layers, dropout, lr = 20, 256, 2, 0.5, 0.001
+num_epochs, num_hidden, num_layers, dropout, lr = 30, 256, 2, 0.5, 0.0005
 
 node_features = graph.ndata['feat']
 
@@ -26,8 +26,8 @@ node_features = graph.ndata['feat']
 # node_features[:, r:] = 0
 
 num_input, num_output = node_features.shape[1], int(labels.max().item()+1)
-# Model = StochasticSAGE(num_input, num_hidden, num_output, num_layers, dropout)
-Model = StochasticGATNet(num_input, num_hidden, num_output, num_layers, 4, dropout)
+Model = StochasticSAGE(num_input, num_hidden, num_output, num_layers, dropout)
+# Model = StochasticGATNet(num_input, num_hidden, num_output, num_layers, 4, dropout)
 Opt = torch.optim.AdamW(Model.parameters(), lr=lr)
 Loss = F.nll_loss
 
@@ -42,8 +42,8 @@ dataloader = dgl.dataloading.DataLoader(
 
 plt.xlabel('epoch')
 plt.ylabel('loss')
-pltx = [epoch+1 for epoch in range(num_epochs)]
 loss_list, train_acc, valid_acc, test_acc = Stochastic_run_graph(graph, labels, dataloader, split_idx, evaluator, num_epochs, Model, Loss, Opt, True)
+pltx = [epoch+1 for epoch in range(loss_list.__len__())]
 plt.plot(pltx, loss_list)
 plt.savefig('./image/train.jpg')
 print("----------------------------")

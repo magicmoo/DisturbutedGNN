@@ -103,12 +103,13 @@ def Stochastic_run_graph(graph, labels, dataloader, split_idx, evaluator, num_ep
     loss_list = []
     step = 10   # the step program output train's data
     for epoch in range(num_epochs):
-        loss = 0
+
         for _, output_nodes, blocks in dataloader:
             blocks = [b.to(try_gpu()) for b in blocks]
-            loss += Stochastic_train(Model, Loss, blocks, output_nodes, labels, Opt)
-        
-        loss_list.append(loss)
+            loss = Stochastic_train(Model, Loss, blocks, output_nodes, labels, Opt)
+            loss_list.append(loss)
+            print(loss)
+            
         if is_output and (epoch+1)%(num_epochs//step) == 0:
             train_acc, valid_acc, test_acc = Stochastic_test(Model, graph, labels, split_idx, evaluator)
             print(f'---------------------{(epoch+1)//(num_epochs//step)}---------------------')

@@ -101,6 +101,15 @@ class StochasticSAGE(nn.Module):
         h = self.convs[-1](g, h)
         return F.log_softmax(h, dim=-1)
     
+    def embedding(self, blocks, h):
+        for i, conv in enumerate(self.convs[:-1]):
+            h = conv(blocks[i], h)
+            h = self.bns[i](h)
+            h = F.relu(h)
+            h = F.dropout(h, p=self.dropout, training=self.training)
+        h = self.convs[-1](blocks[-1], h)
+        return h
+    
 class StochasticGATNet(nn.Module):
     def __init__(self, in_dim, hidden, out_dim, num_layers=3, heads=8, dropout=0.5):
         super().__init__()
@@ -142,4 +151,13 @@ class StochasticGATNet(nn.Module):
         h = self.convs[-1](g, h)
         h = self.flatten(h)
         h =  F.log_softmax(h, dim=1)
+        return h
+    
+    def embedding(self, blocks, h):
+        for i in range(self.num_layers - 1):
+            h = self.convs[i](blocks[i], h)
+            h = self.flatten(h)
+            h = self.bns[i](h)
+        h = self.convs[-1](blocks[-1], h)
+        h = self.flatten(h)
         return h

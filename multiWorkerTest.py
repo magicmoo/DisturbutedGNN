@@ -16,9 +16,7 @@ split_idx = dataset.get_idx_split()
 graph, labels = dataset[0]
 # graph.add_edges(*graph.all_edges()[::-1])
 graph = graph.remove_self_loop().add_self_loop()
-
-
-num_epochs, num_hidden, num_layers, dropout, lr = 50, 256, 2, 0.5, 0.001
+num_epochs, num_hidden, num_layers, dropout, lr = 30, 256, 2, 0.5, 0.001
 
 node_features = graph.ndata['feat']
 
@@ -33,7 +31,7 @@ models, opts = [], []
 num_workers = 4
 for i in range(num_workers):
     models.append(StochasticSAGE(num_input, num_hidden, num_output, num_layers, dropout))
-    opts.append(torch.optim.AdamW(models[-1].parameters(), lr=lr))
+    opts.append(torch.optim.AdamW(models[i].parameters(), lr=lr))
 
 sampler = dgl.dataloading.MultiLayerNeighborSampler([15, 10])
 dataloader = dgl.dataloading.DataLoader(
@@ -46,8 +44,12 @@ dataloader = dgl.dataloading.DataLoader(
 plt.xlabel('epoch')
 plt.ylabel('test_acc')
 
-loss_list, train_list, valid_list, test_list = multi_Stochastic_run_graph(graph, labels, dataloader, split_idx, evaluator, num_epochs, models, Loss, opts, 2, True)
+loss_list, train_list, valid_list, test_list = multi_Stochastic_run_graph(graph, labels, dataloader, split_idx, evaluator, num_epochs, models, Loss, opts, 100000000, True)
 pltx = [iteration+1 for iteration in range(test_list.__len__())]
 
 plt.plot(pltx, test_list)
 plt.savefig('./image/train.jpg')
+
+# iterations : 193 * num_epochs
+
+# 193 * 50 = 9650

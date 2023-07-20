@@ -33,7 +33,7 @@ models, opts = [], []
 num_workers = 4
 for i in range(num_workers):
     models.append(StochasticSAGE(num_input, num_hidden, num_output, num_layers, dropout))
-    opts.append(torch.optim.AdamW(models[-1].parameters(), lr=lr))
+    opts.append(torch.optim.AdamW(models[i].parameters(), lr=lr))
 
 sampler = dgl.dataloading.MultiLayerNeighborSampler([15, 10])
 dataloader = dgl.dataloading.DataLoader(
