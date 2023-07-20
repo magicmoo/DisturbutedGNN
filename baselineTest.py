@@ -1,7 +1,7 @@
 from ogb.nodeproppred import DglNodePropPredDataset, Evaluator
 from util.model import StochasticSAGE, StochasticGATNet
 from util.multiWorker import multi_Stochastic_run_graph, avgModel, replaceModel
-from util.util import try_gpu, Stochastic_train, Stochastic_test
+from util.util import try_gpu, Stochastic_train, Stochastic_test, train
 import torch
 import dgl
 import dgl.nn as dglnn
@@ -43,21 +43,41 @@ def run1(graph, labels, dataloader, split_idx, evaluator, num_epochs, Models, Lo
     return loss_list, train_list, valid_list, test_list
 
 def run2(graph, labels, dataloader, split_idx, evaluator, num_epochs, Models, Loss, Opts, is_output=False):
-    node_features = graph.ndata['feat']
     num_workers = Models.__len__()
+    model, opt = Models[0], Opts[0]
 
     loss_list, train_list, valid_list, test_list = [], [], [], []
     step = 10   # the step program output train's data
-    idx = 0
+    idx, loss = 0, 0.0
     for epoch in range(num_epochs):
-        loss = 0
         for input_nodes, output_nodes, blocks in dataloader:
             blocks = [b.to(try_gpu()) for b in blocks]
-            loss += Stochastic_train(Models[idx], Loss, blocks, output_nodes, labels, Opts[i])/num_workers
-            idx = (idx+1)%num_workers
-        loss_list.append(loss/num_workers)
-        
-        avgModel(Models)
+            model = model.to(try_gpu())
+
+            model.eval()
+            train_labels = labels[output_nodes].squeeze(1).to(try_gpu())
+            node_features = blocks[0].srcdata['feat']
+            pred_labels = model(blocks, node_features)
+            loss += Loss(pred_labels, train_labels)
+            idx = idx+1
+            if idx == num_workers:
+                loss_list.append(loss)
+                _loss = loss
+                print(_loss)
+                loss, idx = 0.0, 0
+
+                model.train()
+                opt.zero_grad()
+                graph = graph.to(try_gpu())
+                node_features = graph.ndata['feat']
+                pred_labels = model.cal(graph, node_features)
+                pred_train = pred_labels[split_idx['train']]
+                # train_output = nn.functional.one_hot(labels[train_idx], num_classes=pred_train.shape[-1]).squeeze()
+                train_output = labels[split_idx['train']].squeeze(1)
+                loss = Loss(pred_train, train_output)
+                loss.backward()
+                opt.step()
+
         train_acc, valid_acc, test_acc = Stochastic_test(Models[0], graph, labels, split_idx, evaluator)
         train_list.append(train_acc)
         valid_list.append(valid_acc)
@@ -66,7 +86,7 @@ def run2(graph, labels, dataloader, split_idx, evaluator, num_epochs, Models, Lo
         if is_output and (epoch+1)%(num_epochs//step) == 0:
             train_acc, valid_acc, test_acc = Stochastic_test(Models[0], graph, labels, split_idx, evaluator)
             print(f'---------------------{(epoch+1)//(num_epochs//step)}---------------------')
-            print(f'loss: {loss:.6}')
+            print(f'loss: {_loss:.6}')
             print(f'train_acc: {train_acc:.2}')
             print(f'valid_acc: {valid_acc:.2}')
             print(f'test_acc: {test_acc:.2}')
@@ -195,12 +215,22 @@ dataloader = dgl.dataloading.DataLoader(
     drop_last=False,
     num_workers=0)
 
+# mode = 'test_acc'
+mode = 'loss'
+
 plt.xlabel('epoch')
-plt.ylabel('loss')
+plt.ylabel(mode)
 
 # loss_list, train_list, valid_list, test_list = run1(graph, labels, dataloader, split_idx, evaluator, num_epochs, models, Loss, opts, True)
-loss_list, train_list, valid_list, test_list = run4(graph, labels, dataloader, split_idx, evaluator, num_epochs, models, Loss, opts, True)
-pltx = [iteration+1 for iteration in range(loss_list.__len__())]
+loss_list, train_list, valid_list, test_list = run2(graph, labels, dataloader, split_idx, evaluator, num_epochs, models, Loss, opts, True)
 
-plt.plot(pltx, loss_list)
+
+bandwidth = 10
+
+if mode=='loss':
+    pltx = [iteration+1 for iteration in range(loss_list.__len__())]
+    plt.plot(pltx, loss_list)
+elif mode=='test_acc':
+    pltx = [iteration+1 for iteration in range(test_list.__len__())]
+    plt.plot(pltx, test_list)
 plt.savefig('./image/train.jpg')
