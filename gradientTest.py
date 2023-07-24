@@ -130,7 +130,7 @@ for epoch in range(num_epochs):
             loss += Stochastic_train(Model, Loss, blocks, output_nodes, labels, opts[i])/num_workers
         avgModel(models)
 
-        if is_correct and cnt%correct_step==0:
+        # if is_correct and cnt%correct_step==0:  #wrong
             
             
 
