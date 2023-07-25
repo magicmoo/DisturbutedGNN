@@ -22,14 +22,21 @@ def cal_parameter_size(model):
 def run1(graph, labels, dataloader, split_idx, evaluator, num_epochs, Models, Loss, Opts, is_output=False):
     node_features = graph.ndata['feat']
     num_workers = Models.__len__()
-    time_now, pltx, pltx2 = 0, [], []
+    time_now, time_now2, time_now3, time_now4, pltx, pltx2, pltx3, pltx4 = 0, 0, 0, 0, [], [], [], []
     loss_list, train_list, valid_list, test_list = [], [], [], []
     step = 10   # the step program output train's data
     idx, loss = 0, 0.0
     for epoch in range(num_epochs):
         _loss = cal_loss2(labels, dataloader, Models, Loss, Opts)
+        loss_list.append(_loss)
+        train_acc, valid_acc, test_acc = Stochastic_test(Models[0], graph, labels, split_idx, evaluator)
+        train_list.append(train_acc)
+        valid_list.append(valid_acc)
+        test_list.append(test_acc)
         pltx.append(time_now/60)
-        loss_list.append(exp(_loss))
+        pltx2.append(time_now2/60)
+        pltx3.append(time_now3/60)
+        pltx4.append(time_now4/60)
         for input_nodes, output_nodes, blocks in dataloader:
             data = blocks[0].srcdata['feat']
             feature_time = data.element_size() * data.nelement() / bandwidth
@@ -42,12 +49,9 @@ def run1(graph, labels, dataloader, split_idx, evaluator, num_epochs, Models, Lo
                 avgModel(Models)
                 parameter_time = 2 * cal_parameter_size(Models[0]) / bandwidth
                 time_now += compute_time + sample_time + feature_time + parameter_time
-                
-        train_acc, valid_acc, test_acc = Stochastic_test(Models[0], graph, labels, split_idx, evaluator)
-        train_list.append(train_acc)
-        valid_list.append(valid_acc)
-        test_list.append(test_acc)
-        pltx2.append(time_now/60)
+                time_now2 += compute_time + sample_time + feature_time*bandwidth/bandwidth2 + parameter_time*bandwidth/bandwidth2
+                time_now3 += compute_time + sample_time + feature_time*bandwidth/bandwidth3 + parameter_time*bandwidth/bandwidth3
+                time_now4 += compute_time + sample_time + feature_time*bandwidth/bandwidth4 + parameter_time*bandwidth/bandwidth4
 
         if time_now > max_time:
             break
@@ -59,7 +63,18 @@ def run1(graph, labels, dataloader, split_idx, evaluator, num_epochs, Models, Lo
             print(f'train_acc: {train_acc:.2}')
             print(f'valid_acc: {valid_acc:.2}')
             print(f'test_acc: {test_acc:.2}')
-    return loss_list, train_list, valid_list, test_list, pltx, pltx2
+            
+    _loss = cal_loss2(labels, dataloader, Models, Loss, Opts)
+    loss_list.append(_loss)
+    train_acc, valid_acc, test_acc = Stochastic_test(Models[0], graph, labels, split_idx, evaluator)
+    train_list.append(train_acc)
+    valid_list.append(valid_acc)
+    test_list.append(test_acc)
+    pltx.append(time_now/60)
+    pltx2.append(time_now2/60)
+    pltx3.append(time_now3/60)
+    pltx4.append(time_now4/60)
+    return loss_list, train_list, valid_list, test_list, pltx, pltx2, pltx3, pltx4
 
 def _train(model, Loss, graph, labels, train_idx, opt):
     model.train()
@@ -103,40 +118,43 @@ def cal_loss2(labels, dataloader, Models, Loss, Opts):
 def run2(graph, labels, dataloader, split_idx, evaluator, num_epochs, Models, Loss, Opts, is_output=False):
     num_workers = Models.__len__()
     model, opt = Models[0], Opts[0]
-    time_now, pltx, pltx2 = 0, [], []
+    time_now, time_now2, time_now3, time_now4, pltx, pltx2, pltx3, pltx4 = 0, 0, 0, 0, [], [], [], []
     loss_list, train_list, valid_list, test_list = [], [], [], []
     step = 10   # the step program output train's data
     idx, loss = 0, 0.0
-    input_nodes, output_nodes, blocks = next(iter(dataloader))
-    blocks = [b.to(try_gpu()) for b in blocks]
-    compute_time = cal_compute_time(model, opt, blocks, labels, output_nodes, Loss)
-
     for epoch in range(num_epochs):
-        workers_time = 0
-        for input_nodes, output_nodes, blocks in dataloader:
-            data = blocks[0].srcdata['feat']
-            workers_time += (input_nodes.shape[0]-output_nodes.shape[0]) / num_workers / num_workers / bandwidth
-            feature_time = data.element_size() * data.nelement() / bandwidth
-            blocks = [b.to(try_gpu()) for b in blocks]
-            loss += cal_loss(model, Loss, blocks, output_nodes, labels).item()/num_workers
-            idx = idx+1
-            if idx == num_workers:
-                _loss = loss
-                # print(_loss)
-                loss, idx = 0.0, 0
-                _train(model, Loss, graph, labels, split_idx['train'], opt)
-                parameter_time = 2 * cal_parameter_size(Models[0]) / bandwidth
-                time_now += feature_time + compute_time + sample_time + workers_time + parameter_time
-
-        loss_list.append(exp(_loss))
-        pltx.append(time_now/60)
-        pltx2.append(time_now/60)
-        # graph = graph.to(try_gpu())
+        _loss = cal_loss2(labels, dataloader, Models, Loss, Opts)
+        loss_list.append(_loss)
         model = model.to(torch.device('cpu'))
-        train_acc, valid_acc, test_acc = Stochastic_test(model, graph, labels, split_idx, evaluator)
+        train_acc, valid_acc, test_acc = Stochastic_test(Models[0], graph, labels, split_idx, evaluator)
         train_list.append(train_acc)
         valid_list.append(valid_acc)
         test_list.append(test_acc)
+        pltx.append(time_now/60)
+        pltx2.append(time_now2/60)
+        pltx3.append(time_now3/60)
+        pltx4.append(time_now4/60)
+        for input_nodes, output_nodes, blocks in dataloader:
+            dataloader2 = dgl.dataloading.DataLoader(
+                graph, output_nodes, sampler,
+                # batch_size = (node_features[split_idx['train']].shape[0] + num_workers - 1) // num_workers,
+                batch_size = 10240*num_workers,
+                shuffle=True,
+                drop_last=False,
+                num_workers=0)
+            feature_time = 0
+            for input_nodes2, output_nodes2, blocks2 in dataloader2:
+                data = blocks2[0].srcdata['feat']
+                feature_time += data.element_size() * data.nelement() / bandwidth / num_workers
+            blocks = [b.to(try_gpu()) for b in blocks]
+            Stochastic_train(model, Loss, blocks, output_nodes, labels, opt)
+            replaceModel(Models)
+            parameter_time = 2 * cal_parameter_size(model) / bandwidth
+            time_now += feature_time + compute_time + sample_time + parameter_time
+            time_now2 += feature_time*bandwidth/bandwidth2 + compute_time + sample_time + parameter_time*bandwidth/bandwidth2
+            time_now3 += feature_time*bandwidth/bandwidth3 + compute_time + sample_time + parameter_time*bandwidth/bandwidth3
+            time_now4 += feature_time*bandwidth/bandwidth4 + compute_time + sample_time + parameter_time*bandwidth/bandwidth4
+        # graph = graph.to(try_gpu())
 
         if time_now > max_time:
             break
@@ -148,13 +166,26 @@ def run2(graph, labels, dataloader, split_idx, evaluator, num_epochs, Models, Lo
             print(f'train_acc: {train_acc:.2}')
             print(f'valid_acc: {valid_acc:.2}')
             print(f'test_acc: {test_acc:.2}')
-    return loss_list, train_list, valid_list, test_list, pltx, pltx2
+            print(f'time_now: {time_now}')
+    
+    _loss = cal_loss2(labels, dataloader, Models, Loss, Opts)
+    loss_list.append(_loss)
+    model = model.to(torch.device('cpu'))
+    train_acc, valid_acc, test_acc = Stochastic_test(Models[0], graph, labels, split_idx, evaluator)
+    train_list.append(train_acc)
+    valid_list.append(valid_acc)
+    test_list.append(test_acc)
+    pltx.append(time_now/60)
+    pltx2.append(time_now2/60)
+    pltx3.append(time_now3/60)
+    pltx4.append(time_now4/60)
+    return loss_list, train_list, valid_list, test_list, pltx, pltx2, pltx3, pltx4
 
 def run3(graph, labels, dataloader, split_idx, evaluator, num_epochs, Models, Loss, Opts, correct_step, is_output=False):
     node_features = graph.ndata['feat']
     num_workers, num_features = Models.__len__(), node_features.shape[-1]
     split_list = [0]
-    time_now, pltx, pltx2 = 0, [], []
+    time_now, time_now2, time_now3, time_now4, pltx, pltx2, pltx3, pltx4 = 0, 0, 0, 0, [], [], [], []
     for i in range(num_workers):
         split_list.append(split_list[-1] + (num_features//num_workers))
         if i < num_features%num_workers:
@@ -165,14 +196,21 @@ def run3(graph, labels, dataloader, split_idx, evaluator, num_epochs, Models, Lo
     idx, loss = 0, 0.0
     for epoch in range(num_epochs):
         _loss = cal_loss2(labels, dataloader, Models, Loss, Opts)
-        loss_list.append(exp(_loss))
+        loss_list.append(_loss)
+        train_acc, valid_acc, test_acc = Stochastic_test(Models[0], graph, labels, split_idx, evaluator)
+        train_list.append(train_acc)
+        valid_list.append(valid_acc)
+        test_list.append(test_acc)
         pltx.append(time_now/60)
+        pltx2.append(time_now2/60)
+        pltx3.append(time_now3/60)
+        pltx4.append(time_now4/60)
         for input_nodes, output_nodes, blocks in dataloader:
             data = blocks[0].srcdata['feat']
-            feature_time = data.element_size() * data.nelement() / bandwidth
+            feature_time = data.element_size() * data.nelement() * (1-1/num_workers) / bandwidth
 
             if epoch%(correct_step+1) != 0:
-                feature_time /= num_workers
+                feature_time = 0
                 blocks = [b.to(torch.device('cpu')) for b in blocks]
                 blocks[0].srcdata['feat'][:, :] = 0
                 blocks[0].srcdata['feat'][:, split_list[idx]:split_list[idx+1]] = node_features[input_nodes, split_list[idx]:split_list[idx+1]]*num_workers
@@ -186,12 +224,9 @@ def run3(graph, labels, dataloader, split_idx, evaluator, num_epochs, Models, Lo
                 avgModel(Models)
                 parameter_time = 2 * cal_parameter_size(Models[0]) / bandwidth
                 time_now += compute_time + sample_time + feature_time + parameter_time
-
-        train_acc, valid_acc, test_acc = Stochastic_test(Models[0], graph, labels, split_idx, evaluator)
-        train_list.append(train_acc)
-        valid_list.append(valid_acc)
-        test_list.append(test_acc)
-        pltx2.append(time_now/60)
+                time_now2 += compute_time + sample_time + feature_time*bandwidth/bandwidth2 + parameter_time*bandwidth/bandwidth2
+                time_now3 += compute_time + sample_time + feature_time*bandwidth/bandwidth3 + parameter_time*bandwidth/bandwidth3
+                time_now4 += compute_time + sample_time + feature_time*bandwidth/bandwidth4 + parameter_time*bandwidth/bandwidth4
         
         if time_now > max_time:
             break
@@ -203,7 +238,17 @@ def run3(graph, labels, dataloader, split_idx, evaluator, num_epochs, Models, Lo
             print(f'train_acc: {train_acc:.2}')
             print(f'valid_acc: {valid_acc:.2}')
             print(f'test_acc: {test_acc:.2}')
-    return loss_list, train_list, valid_list, test_list, pltx, pltx2
+    _loss = cal_loss2(labels, dataloader, Models, Loss, Opts)
+    loss_list.append(_loss)
+    train_acc, valid_acc, test_acc = Stochastic_test(Models[0], graph, labels, split_idx, evaluator)
+    train_list.append(train_acc)
+    valid_list.append(valid_acc)
+    test_list.append(test_acc)
+    pltx.append(time_now/60)
+    pltx2.append(time_now2/60)
+    pltx3.append(time_now3/60)
+    pltx4.append(time_now4/60)
+    return loss_list, train_list, valid_list, test_list, pltx, pltx2, pltx3, pltx4
 
 def run4(graph, labels, dataloader, split_idx, evaluator, num_epochs, Models, Loss, Opts, is_output=False):
     node_features = graph.ndata['feat']
@@ -217,11 +262,18 @@ def run4(graph, labels, dataloader, split_idx, evaluator, num_epochs, Models, Lo
     loss_list, train_list, valid_list, test_list = [], [], [], []
     step = 10   # the step program output train's data
     idx, loss = 0, 0.0
-    time_now, pltx, pltx2 = 0, [], []
+    time_now, time_now2, time_now3, time_now4, pltx, pltx2, pltx3, pltx4 = 0, 0, 0, 0, [], [], [], []
     for epoch in range(num_epochs):
         _loss = cal_loss2(labels, dataloader, Models, Loss, Opts)
-        loss_list.append(exp(_loss))
+        loss_list.append(_loss)
+        train_acc, valid_acc, test_acc = Stochastic_test(Models[0], graph, labels, split_idx, evaluator)
+        train_list.append(train_acc)
+        valid_list.append(valid_acc)
+        test_list.append(test_acc)
         pltx.append(time_now/60)
+        pltx2.append(time_now2/60)
+        pltx3.append(time_now3/60)
+        pltx4.append(time_now4/60)
         for input_nodes, output_nodes, blocks in dataloader:
             data = blocks[0].srcdata['feat']
             feature_time = data.element_size() / num_workers * data.nelement() / bandwidth
@@ -239,12 +291,9 @@ def run4(graph, labels, dataloader, split_idx, evaluator, num_epochs, Models, Lo
                 avgModel(Models)
                 parameter_time = 2 * cal_parameter_size(Models[0]) / bandwidth
                 time_now += compute_time + sample_time + feature_time + parameter_time
-
-        train_acc, valid_acc, test_acc = Stochastic_test(Models[0], graph, labels, split_idx, evaluator)
-        train_list.append(train_acc)
-        valid_list.append(valid_acc)
-        test_list.append(test_acc)
-        pltx2.append(time_now/60)
+                time_now2 += compute_time + sample_time + feature_time*bandwidth/bandwidth2 + parameter_time*bandwidth/bandwidth2
+                time_now3 += compute_time + sample_time + feature_time*bandwidth/bandwidth3 + parameter_time*bandwidth/bandwidth3
+                time_now4 += compute_time + sample_time + feature_time*bandwidth/bandwidth4 + parameter_time*bandwidth/bandwidth4
 
         if time_now > max_time:
             break
@@ -256,7 +305,18 @@ def run4(graph, labels, dataloader, split_idx, evaluator, num_epochs, Models, Lo
             print(f'train_acc: {train_acc:.2}')
             print(f'valid_acc: {valid_acc:.2}')
             print(f'test_acc: {test_acc:.2}')
-    return loss_list, train_list, valid_list, test_list, pltx, pltx2
+    
+    _loss = cal_loss2(labels, dataloader, Models, Loss, Opts)
+    loss_list.append(_loss)
+    train_acc, valid_acc, test_acc = Stochastic_test(Models[0], graph, labels, split_idx, evaluator)
+    train_list.append(train_acc)
+    valid_list.append(valid_acc)
+    test_list.append(test_acc)
+    pltx.append(time_now/60)
+    pltx2.append(time_now2/60)
+    pltx3.append(time_now3/60)
+    pltx4.append(time_now4/60)
+    return loss_list, train_list, valid_list, test_list, pltx, pltx2, pltx3, pltx4
 
 def cal_gradient(model):
     params = list(model.parameters())
@@ -376,19 +436,26 @@ def run5(graph, labels, dataloader, split_idx, evaluator, num_epochs, Models, Lo
     loss_list, train_list, valid_list, test_list = [], [], [], []
     step = 10   # the step program output train's data
     idx, loss, cnt, correct_step = 0, 0.0, -1, 0
-    time_now, pltx, pltx2 = 0, [], []
+    time_now, time_now2, time_now3, time_now4, pltx, pltx2, pltx3, pltx4 = 0, 0, 0, 0, [], [], [], []
     gradient_w1, loss_w1, loss_w2 = 0, 0, 0
     m = cal_m(labels,dataloader, Models, Loss, Opts, split_list)
     for epoch in range(num_epochs):
         _loss = cal_loss2(labels, dataloader, Models, Loss, Opts)
+        loss_list.append(_loss)
+        train_acc, valid_acc, test_acc = Stochastic_test(Models[0], graph, labels, split_idx, evaluator)
+        train_list.append(train_acc)
+        valid_list.append(valid_acc)
+        test_list.append(test_acc)
         pltx.append(time_now/60)
-        loss_list.append(exp(_loss))
+        pltx2.append(time_now2/60)
+        pltx3.append(time_now3/60)
+        pltx4.append(time_now4/60)
         for input_nodes, output_nodes, blocks in dataloader:
             model, opt = Models[idx], Opts[idx]
             data = blocks[0].srcdata['feat']
-            feature_time = data.element_size() * data.nelement() / bandwidth
+            feature_time = data.element_size() * data.nelement() * (1-1/num_workers) / bandwidth
             if cnt < correct_step:
-                feature_time /= num_workers
+                feature_time = 0
                 blocks = [b.to(torch.device('cpu')) for b in blocks]
                 blocks[0].srcdata['feat'][:, :] = 0
                 blocks[0].srcdata['feat'][:, split_list[idx]:split_list[idx+1]] = node_features[input_nodes, split_list[idx]:split_list[idx+1]]*num_workers
@@ -408,6 +475,9 @@ def run5(graph, labels, dataloader, split_idx, evaluator, num_epochs, Models, Lo
                 avgModel(Models)
                 parameter_time = 2 * cal_parameter_size(Models[0]) / bandwidth
                 time_now += compute_time + sample_time + feature_time + parameter_time
+                time_now2 += compute_time + sample_time + feature_time*bandwidth/bandwidth2 + parameter_time*bandwidth/bandwidth2
+                time_now3 += compute_time + sample_time + feature_time*bandwidth/bandwidth3 + parameter_time*bandwidth/bandwidth3
+                time_now4 += compute_time + sample_time + feature_time*bandwidth/bandwidth4 + parameter_time*bandwidth/bandwidth4
                 if cnt >= correct_step:
                     cnt, loss_w1 = 0, _loss
                     loss_w2 = cal_loss2(labels, dataloader, Models, Loss, Opts)
@@ -416,21 +486,17 @@ def run5(graph, labels, dataloader, split_idx, evaluator, num_epochs, Models, Lo
                     s1 = (data.shape[0] * data.shape[1] * data.element_size() / compute_time / bandwidth * (2/lr*loss_w1+(lr*lf-1)*gradient_w1))
                     s2 = (1-lr*lf)*gradient_w1
                     correct_step = min((s1/m) ** 0.5, s2/m)
+                    correct_step = round(correct_step.item(), 0)
                     # correct_step = 0
-                    print(f'correct_step: {correct_step}')
-                    print(f's1: {s1}, s2: {s2}, m: {m}')
-                    print(f'gradient_w1: {gradient_w1}, loss_w1: {loss_w1}, loss_w2: {loss_w2}, time_now: {time_now}')
-                    print("---------------------")
+                    # print(f'correct_step: {correct_step}')
+                    # print(f's1: {s1}, s2: {s2}, m: {m}')
+                    # print(f'gradient_w1: {gradient_w1}, loss_w1: {loss_w1}, loss_w2: {loss_w2}, time_now: {time_now}')
+                    # print("---------------------")
                     gradient_w1, loss_w1, loss_w2 = 0, 0, 0
                 else:
                     cnt += 1
 
         # print(f'time_now: {time_now}')
-        train_acc, valid_acc, test_acc = Stochastic_test(Models[0], graph, labels, split_idx, evaluator)
-        train_list.append(train_acc)
-        valid_list.append(valid_acc)
-        test_list.append(test_acc)
-        pltx2.append(time_now/60)
 
         if time_now > max_time:
             break
@@ -442,7 +508,17 @@ def run5(graph, labels, dataloader, split_idx, evaluator, num_epochs, Models, Lo
             print(f'train_acc: {train_acc:.2}')
             print(f'valid_acc: {valid_acc:.2}')
             print(f'test_acc: {test_acc:.2}')
-    return loss_list, train_list, valid_list, test_list, pltx, pltx2
+    _loss = cal_loss2(labels, dataloader, Models, Loss, Opts)
+    loss_list.append(_loss)
+    train_acc, valid_acc, test_acc = Stochastic_test(Models[0], graph, labels, split_idx, evaluator)
+    train_list.append(train_acc)
+    valid_list.append(valid_acc)
+    test_list.append(test_acc)
+    pltx.append(time_now/60)
+    pltx2.append(time_now2/60)
+    pltx3.append(time_now3/60)
+    pltx4.append(time_now4/60)
+    return loss_list, train_list, valid_list, test_list, pltx, pltx2, pltx3, pltx4
 
 d_name = 'ogbn-products'
 dataset = DglNodePropPredDataset(name = d_name)
@@ -451,7 +527,7 @@ split_idx = dataset.get_idx_split()
 graph, labels = dataset[0]
 graph.add_edges(*graph.all_edges()[::-1])
 graph = graph.remove_self_loop().add_self_loop()
-num_epochs, num_hidden, num_layers, dropout, lr = 500, 256, 2, 0.5, 0.001
+num_epochs, num_hidden, num_layers, dropout, lr = 50000, 256, 2, 0.5, 0.001
 
 node_features = graph.ndata['feat']
 
@@ -479,8 +555,8 @@ dataloader = dgl.dataloading.DataLoader(
 
 dataloader2 = dgl.dataloading.DataLoader(
     graph, split_idx['train'], sampler,
-    batch_size = (node_features[split_idx['train']].shape[0] + num_workers - 1) // num_workers,
-    # batch_size = 1024,
+    # batch_size = (node_features[split_idx['train']].shape[0] + num_workers - 1) // num_workers,
+    batch_size = 1024*num_workers,
     shuffle=True,
     drop_last=False,
     num_workers=0)
@@ -522,7 +598,10 @@ def cal_sample_time(dataloader):
     t2 = time.time()
     return (t2-t1)/nums
 
-bandwidth = 10 * 1024 * 1024 * 1024
+bandwidth = 10 * 1000 * 1000 * 1000 / 8
+bandwidth2 = 25 * 1000 * 1000 * 1000 / 8
+bandwidth3 = 40 * 1000 * 1000 * 1000 / 8
+bandwidth4 = 100 * 1000 * 1000 * 1000 / 8
 
 input_nodes, output_nodes, blocks = next(iter(dataloader))
 blocks = [b.to(try_gpu()) for b in blocks]
@@ -533,7 +612,7 @@ sample_time = cal_sample_time(dataloader)
 print(f'sample_time: {sample_time}')
 print(f'compute_time: {compute_time}')
 
-max_time = 60 * 0.5
+max_time = 60 * 1
 
 plt.subplot(1, 2, 1)
 plt.xlabel('Wall-clock time(min)')
@@ -544,83 +623,101 @@ plt.ylabel('test_acc')
 
 file = open('./savedata/baselineTest.txt', mode = 'w')
 
-loss_list, train_list, valid_list, test_list, pltx, pltx2 = run1(graph, labels, dataloader, split_idx, evaluator, num_epochs, models, Loss, opts, False)
+loss_list, train_list, valid_list, test_list, pltx, pltx2, pltx3, pltx4 = run1(graph, labels, dataloader, split_idx, evaluator, num_epochs, models, Loss, opts, False)
 plt.subplot(1, 2, 1)
 plt.plot(pltx, loss_list)
 plt.subplot(1, 2, 2)
-plt.plot(pltx2, test_list)
+plt.plot(pltx, test_list)
 file.write(str(loss_list)+'\n')
 file.write(str(test_list)+'\n')
 file.write(str(pltx)+'\n')
 file.write(str(pltx2)+'\n')
+file.write(str(pltx3)+'\n')
+file.write(str(pltx4)+'\n')
 for model in models:
     model.reset_parameters()
-print(test_list[-1])
+file.write('\n')
+print(f'------------(1):{test_list[-1]}------------')
 
-# loss_list, train_list, valid_list, test_list, pltx, pltx2 = run2(graph, labels, dataloader2, split_idx, evaluator, num_epochs, models, Loss, opts, True)
-# plt.subplot(1, 2, 1)
-# plt.plot(pltx, loss_list)
-# plt.subplot(1, 2, 2)
-# plt.plot(pltx2, test_list)
-# file.write(str(loss_list)+'\n')
-# file.write(str(test_list)+'\n')
-# file.write(str(pltx)+'\n')
-# file.write(str(pltx2)+'\n')
-# for model in models:
-#     model.reset_parameters()
-# print(test_list[-1])
+loss_list, train_list, valid_list, test_list, pltx, pltx2, pltx3, pltx4 = run2(graph, labels, dataloader2, split_idx, evaluator, num_epochs, models, Loss, opts, False)
+plt.subplot(1, 2, 1)
+plt.plot(pltx, loss_list)
+plt.subplot(1, 2, 2)
+plt.plot(pltx, test_list)
+file.write(str(loss_list)+'\n')
+file.write(str(test_list)+'\n')
+file.write(str(pltx)+'\n')
+file.write(str(pltx2)+'\n')
+file.write(str(pltx3)+'\n')
+file.write(str(pltx4)+'\n')
+for model in models:
+    model.reset_parameters()
+file.write('\n')
+print(f'------------(2):{test_list[-1]}------------')
 
-# loss_list, train_list, valid_list, test_list, pltx, pltx2 = run3(graph, labels, dataloader, split_idx, evaluator, num_epochs, models, Loss, opts, 8, False)
-# plt.subplot(1, 2, 1)
-# plt.plot(pltx, loss_list)
-# plt.subplot(1, 2, 2)
-# plt.plot(pltx2, test_list)
-# file.write(str(loss_list)+'\n')
-# file.write(str(test_list)+'\n')
-# file.write(str(pltx)+'\n')
-# file.write(str(pltx2)+'\n')
-# for model in models:
-#     model.reset_parameters()
-# print(test_list[-1])
+loss_list, train_list, valid_list, test_list, pltx, pltx2, pltx3, pltx4 = run3(graph, labels, dataloader, split_idx, evaluator, num_epochs, models, Loss, opts, 8, False)
+plt.subplot(1, 2, 1)
+plt.plot(pltx, loss_list)
+plt.subplot(1, 2, 2)
+plt.plot(pltx, test_list)
+file.write(str(loss_list)+'\n')
+file.write(str(test_list)+'\n')
+file.write(str(pltx)+'\n')
+file.write(str(pltx2)+'\n')
+file.write(str(pltx3)+'\n')
+file.write(str(pltx4)+'\n')
+for model in models:
+    model.reset_parameters()
+file.write('\n')
+print(f'------------(3):{test_list[-1]}------------')
 
-# loss_list, train_list, valid_list, test_list, pltx, pltx2 = run3(graph, labels, dataloader, split_idx, evaluator, num_epochs, models, Loss, opts, 128, False)
-# plt.subplot(1, 2, 1)
-# plt.plot(pltx, loss_list)
-# plt.subplot(1, 2, 2)
-# plt.plot(pltx2, test_list)
-# file.write(str(loss_list)+'\n')
-# file.write(str(test_list)+'\n')
-# file.write(str(pltx)+'\n')
-# file.write(str(pltx2)+'\n')
-# for model in models:
-#     model.reset_parameters()
-# print(test_list[-1])
+loss_list, train_list, valid_list, test_list, pltx, pltx2, pltx3, pltx4 = run3(graph, labels, dataloader, split_idx, evaluator, num_epochs, models, Loss, opts, 128, False)
+plt.subplot(1, 2, 1)
+plt.plot(pltx, loss_list)
+plt.subplot(1, 2, 2)
+plt.plot(pltx, test_list)
+file.write(str(loss_list)+'\n')
+file.write(str(test_list)+'\n')
+file.write(str(pltx)+'\n')
+file.write(str(pltx2)+'\n')
+file.write(str(pltx3)+'\n')
+file.write(str(pltx4)+'\n')
+for model in models:
+    model.reset_parameters()
+file.write('\n')
+print(f'------------(4):{test_list[-1]}------------')
 
-# loss_list, train_list, valid_list, test_list, pltx, pltx2 = run4(graph, labels, dataloader, split_idx, evaluator, num_epochs, models, Loss, opts, False)
-# plt.subplot(1, 2, 1)
-# plt.plot(pltx, loss_list)
-# plt.subplot(1, 2, 2)
-# plt.plot(pltx2, test_list)
-# file.write(str(loss_list)+'\n')
-# file.write(str(test_list)+'\n')
-# file.write(str(pltx)+'\n')
-# file.write(str(pltx2)+'\n')
-# for model in models:
-#     model.reset_parameters()
-# print(test_list[-1])
+loss_list, train_list, valid_list, test_list, pltx, pltx2, pltx3, pltx4 = run4(graph, labels, dataloader, split_idx, evaluator, num_epochs, models, Loss, opts, False)
+plt.subplot(1, 2, 1)
+plt.plot(pltx, loss_list)
+plt.subplot(1, 2, 2)
+plt.plot(pltx, test_list)
+file.write(str(loss_list)+'\n')
+file.write(str(test_list)+'\n')
+file.write(str(pltx)+'\n')
+file.write(str(pltx2)+'\n')
+file.write(str(pltx3)+'\n')
+file.write(str(pltx4)+'\n')
+for model in models:
+    model.reset_parameters()
+file.write('\n')
+print(f'------------(5):{test_list[-1]}------------')
 
 lf = cal_lf(labels, dataloader, models[0], Loss, opts[0])
 
-# loss_list, train_list, valid_list, test_list, pltx, pltx2 = run5(graph, labels, dataloader, split_idx, evaluator, num_epochs, models, Loss, opts, lr, False)
-# plt.subplot(1, 2, 1)
-# plt.plot(pltx, loss_list)
-# plt.subplot(1, 2, 2)
-# plt.plot(pltx2, test_list)
-# file.write(str(loss_list)+'\n')
-# file.write(str(test_list)+'\n')
-# file.write(str(pltx)+'\n')
-# file.write(str(pltx2)+'\n')
-# print(test_list[-1])
+loss_list, train_list, valid_list, test_list, pltx, pltx2, pltx3, pltx4 = run5(graph, labels, dataloader, split_idx, evaluator, num_epochs, models, Loss, opts, lr, False)
+plt.subplot(1, 2, 1)
+plt.plot(pltx, loss_list)
+plt.subplot(1, 2, 2)
+plt.plot(pltx, test_list)
+file.write(str(loss_list)+'\n')
+file.write(str(test_list)+'\n')
+file.write(str(pltx)+'\n')
+file.write(str(pltx2)+'\n')
+file.write(str(pltx3)+'\n')
+file.write(str(pltx4)+'\n')
+file.write('\n')
+print(f'------------(6):{test_list[-1]}------------')
 
 plt.legend(['baseline1', 'baseline2', 'baseline3(step=8)', 'baseline3(step=128)', 'baseline4', 'baseline5'])
 plt.savefig('./image/baselineTest1.jpg')
