@@ -196,7 +196,7 @@ print(f'sample_time: {sample_time}')
 print(f'compute_time: {compute_time}')
 
 max_time = 1*60
-correct_list = [1, 8, 16, 32, 64, 128]
+correct_list = [1, 8, 16, 32, 64]
 plt.subplot(1, 2, 1)
 plt.xlabel('Wall-clock time(min)')
 plt.ylabel('loss')

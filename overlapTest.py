@@ -199,7 +199,7 @@ def run5(graph, labels, dataloader, split_idx, evaluator, num_epochs, Models, Lo
                 parameter_time = 2 * cal_parameter_size(Models[0]) / bandwidth
                 time_now += compute_time + sample_time + feature_time + parameter_time
                 if cnt >= correct_step:
-                    time_now2 += max(sample_time+feature_time, correct_step*(compute_time+parameter_time))
+                    time_now2 += max(feature_time, correct_step*(compute_time+parameter_time))
                     cnt, loss_w1 = 0, _loss
                     loss_w2 = cal_loss2(labels, dataloader, Models, Loss, Opts)
                     s1 = (data.shape[0] * data.shape[1] * data.element_size() / compute_time / bandwidth * (2/lr*loss_w1+(lr*lf-1)*gradient_w1))
@@ -207,10 +207,11 @@ def run5(graph, labels, dataloader, split_idx, evaluator, num_epochs, Models, Lo
                     correct_step = min((s1/m) ** 0.5, s2/m)
                     correct_step = round(correct_step.item(), 0)
                     # correct_step = 0
-                    # print(f'correct_step: {correct_step}')
-                    # print(f's1: {s1}, s2: {s2}, m: {m}')
-                    # print(f'gradient_w1: {gradient_w1}, loss_w1: {loss_w1}, loss_w2: {loss_w2}, time_now: {time_now}')
-                    # print("---------------------")
+                    print(f'correct_step: {correct_step}')
+                    print(f's1: {s1}, s2: {s2}, m: {m}')
+                    print(f'gradient_w1: {gradient_w1}, loss_w1: {loss_w1}, loss_w2: {loss_w2}, time_now: {time_now}')
+                    print(f'time1: {time_now}, time2: {time_now2}')
+                    print("---------------------")
                     gradient_w1, loss_w1, loss_w2 = 0, 0, 0
                 else:
                     cnt += 1
@@ -237,14 +238,14 @@ def run5(graph, labels, dataloader, split_idx, evaluator, num_epochs, Models, Lo
     pltx2.append(time_now2/60)
     return loss_list, train_list, valid_list, test_list, pltx, pltx2
 
-d_name = 'ogbn-products'
+d_name = 'ogbn-papers100M'
 dataset = DglNodePropPredDataset(name = d_name)
 evaluator = Evaluator(name = d_name)
 split_idx = dataset.get_idx_split()
 graph, labels = dataset[0]
-graph.add_edges(*graph.all_edges()[::-1])
-graph = graph.remove_self_loop().add_self_loop()
-num_epochs, num_hidden, num_layers, dropout, lr = 50000, 256, 2, 0.5, 0.001
+# graph.add_edges(*graph.all_edges()[::-1])
+# graph = graph.remove_self_loop().add_self_loop()
+num_epochs, num_hidden, num_layers, dropout, lr = 50000, 256, 2, 0.5, 0.005
 
 node_features = graph.ndata['feat']
 
@@ -265,15 +266,7 @@ sampler = dgl.dataloading.MultiLayerNeighborSampler([15, 10])
 dataloader = dgl.dataloading.DataLoader(
     graph, split_idx['train'], sampler,
     # batch_size = (node_features[split_idx['train']].shape[0] + num_workers - 1) // num_workers,
-    batch_size = 10240,
-    shuffle=True,
-    drop_last=False,
-    num_workers=0)
-
-dataloader2 = dgl.dataloading.DataLoader(
-    graph, split_idx['train'], sampler,
-    # batch_size = (node_features[split_idx['train']].shape[0] + num_workers - 1) // num_workers,
-    batch_size = 10240*num_workers,
+    batch_size = 1024,
     shuffle=True,
     drop_last=False,
     num_workers=0)
@@ -356,5 +349,5 @@ file.write(str(pltx2)+'\n')
 file.write('\n')
 print(f'------------(6):{test_list[-1]}------------')
 
-plt.legend(['baseline1', 'baseline2', 'baseline3(step=8)', 'baseline3(step=128)', 'baseline4', 'baseline5'])
+plt.legend(['no_overlap', 'overlap'])
 plt.savefig('./image/overlapTest.jpg')
