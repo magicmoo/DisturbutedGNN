@@ -202,8 +202,9 @@ def run5(graph, labels, dataloader, split_idx, evaluator, num_epochs, Models, Lo
                     time_now2 += max(feature_time, correct_step*(compute_time+parameter_time))
                     cnt, loss_w1 = 0, _loss
                     loss_w2 = cal_loss2(labels, dataloader, Models, Loss, Opts)
-                    s1 = (data.shape[0] * data.shape[1] * data.element_size() / compute_time / bandwidth * (2/lr*loss_w1+(lr*lf-1)*gradient_w1))
-                    s2 = (1-lr*lf)*gradient_w1
+                    s1 = (data.shape[0] * data.shape[1] * data.element_size() / compute_time / bandwidth * (2/lr*loss_w1+(lr*lf-1)*gradient_w1*num_workers))
+                    s2 = (1-lr*lf)*gradient_w1*num_workers
+                    m = cal_m(labels,dataloader, Models, Loss, Opts, split_list)
                     correct_step = min((s1/m) ** 0.5, s2/m)
                     correct_step = round(correct_step.item(), 0)
                     # correct_step = 0
@@ -322,14 +323,14 @@ sample_time = cal_sample_time(dataloader)
 print(f'sample_time: {sample_time}')
 print(f'compute_time: {compute_time}')
 
-max_time = 60 * 1
+max_time = 60 * 0.5
 
 plt.subplot(1, 2, 1)
 plt.xlabel('Wall-clock time(min)')
 plt.ylabel('loss')
 plt.subplot(1, 2, 2)
 plt.xlabel('Wall-clock time(min)')
-plt.ylabel('test_acc')
+plt.ylabel('test_acc')  
 
 file = open('./savedata/overlapTest.txt', mode = 'w')
 

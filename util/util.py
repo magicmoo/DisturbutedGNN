@@ -29,23 +29,41 @@ def test(model, graph, labels, split_idx, evaluator):
 @torch.no_grad()
 def Stochastic_test(model, graph, labels, split_idx, evaluator):
     model.eval()
-    
     features = graph.ndata['feat']
-    y_pred = model.cal(graph, features).argmax(dim=-1, keepdim=True)
 
-    train_acc = evaluator.eval({
-        'y_true': labels[split_idx['train']],
-        'y_pred': y_pred[split_idx['train']],
-    })['acc']
-    valid_acc = evaluator.eval({
-        'y_true': labels[split_idx['valid']],
-        'y_pred': y_pred[split_idx['valid']],
-    })['acc']
-    test_acc = evaluator.eval({
-        'y_true': labels[split_idx['test']],
-        'y_pred': y_pred[split_idx['test']],
-    })['acc']
+    if evaluator != None:
+        y_pred = model.cal(graph, features).argmax(dim=-1, keepdim=True)
 
+        train_acc = evaluator.eval({
+            'y_true': labels[split_idx['train']],
+            'y_pred': y_pred[split_idx['train']],
+        })['acc']
+        valid_acc = evaluator.eval({
+            'y_true': labels[split_idx['valid']],
+            'y_pred': y_pred[split_idx['valid']],
+        })['acc']
+        test_acc = evaluator.eval({
+            'y_true': labels[split_idx['test']],
+            'y_pred': y_pred[split_idx['test']],
+        })['acc']
+    else:
+        output = model.cal(graph, features).argmax(dim=-1, keepdim=True)
+        y_true = labels[split_idx['train']]
+        y_pred = output[split_idx['train']]
+        correct = torch.sum(y_true == y_pred)
+        train_acc = correct.item() * 1.0 / len(y_pred)
+
+        output = model.cal(graph, features).argmax(dim=-1, keepdim=True)
+        y_true = labels[split_idx['valid']]
+        y_pred = output[split_idx['valid']]
+        correct = torch.sum(y_true == y_pred)
+        valid_acc = correct.item() * 1.0 / len(y_pred)
+
+        output = model.cal(graph, features).argmax(dim=-1, keepdim=True)
+        y_true = labels[split_idx['test']]
+        y_pred = output[split_idx['test']]
+        correct = torch.sum(y_true == y_pred)
+        test_acc = correct.item() * 1.0 / len(y_pred)
     return train_acc, valid_acc, test_acc
 
 

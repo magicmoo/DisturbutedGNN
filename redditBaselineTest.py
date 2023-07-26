@@ -11,7 +11,6 @@ import torch.nn.functional as F
 import util.util as util
 import matplotlib.pyplot as plt
 from math import exp
-from dgl.data import RedditDataset
 
 def cal_parameter_size(model):
     sz = 0
@@ -182,6 +181,7 @@ def run3(graph, labels, dataloader, split_idx, evaluator, num_epochs, Models, Lo
         split_list.append(split_list[-1] + (num_features//num_workers))
         if i < num_features%num_workers:
             split_list[-1] += 1
+    print(split_list)
     loss_list, train_list, valid_list, test_list = [], [], [], []
     step = 10   # the step program output train's data
     idx, loss = 0, 0.0
@@ -520,24 +520,14 @@ def run5(graph, labels, dataloader, split_idx, evaluator, num_epochs, Models, Lo
     pltx4.append(time_now4/60)
     return loss_list, train_list, valid_list, test_list, pltx, pltx2, pltx3, pltx4, overhead, iteration
 
-# d_name = 'ogbn-products'
-# dataset = DglNodePropPredDataset(name = d_name)
-# evaluator = Evaluator(name = d_name)
-# split_idx = dataset.get_idx_split()
-# graph, labels = dataset[0]
-
-dataset = RedditDataset()
-evaluator = None
-graph = dataset[0]
-labels = graph.ndata['label'].reshape(-1, 1)
-node_feature = graph.ndata['feat']
-tmp = torch.arange(0, node_feature.shape[0])
-split_idx = {'train': tmp[graph.ndata['train_mask']], 'valid': tmp[graph.ndata['val_mask']], 'test': tmp[graph.ndata['test_mask']]}
-
+d_name = 'ogbn-products'
+dataset = DglNodePropPredDataset(name = d_name)
+evaluator = Evaluator(name = d_name)
+split_idx = dataset.get_idx_split()
+graph, labels = dataset[0]
 graph.add_edges(*graph.all_edges()[::-1])
 graph = graph.remove_self_loop().add_self_loop()
-num_epochs, num_hidden, num_layers, dropout, lr = 500, 256, 2, 0.5, 0.005
-max_time = 60 * 1
+num_epochs, num_hidden, num_layers, dropout, lr = 50000, 256, 2, 0.5, 0.005
 
 node_features = graph.ndata['feat']
 
@@ -622,6 +612,8 @@ sample_time = cal_sample_time(dataloader)
 
 print(f'sample_time: {sample_time}')
 print(f'compute_time: {compute_time}')
+
+max_time = 60 * 10
 
 plt.subplot(1, 2, 1)
 plt.xlabel('Wall-clock time(min)')
