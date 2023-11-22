@@ -128,15 +128,15 @@ def run2(graph, labels, dataloader, split_idx, evaluator, num_epochs, Models, Lo
             dataloader2 = dgl.dataloading.DataLoader(
                 graph, output_nodes, sampler,
                 # batch_size = (node_features[split_idx['train']].shape[0] + num_workers - 1) // num_workers,
-                batch_size = 10240*num_workers,
+                batch_size = batch_size,
                 shuffle=True,
                 drop_last=False,
                 num_workers=0)
             feature_time = 0
             for input_nodes2, output_nodes2, blocks2 in dataloader2:
                 data = blocks2[0].srcdata['feat']
-                feature_time += data.element_size() * data.nelement() / bandwidth
-                overhead += data.element_size() * data.nelement()
+                feature_time += data.element_size() * data.nelement() / bandwidth / num_workers
+                overhead += data.element_size() * data.nelement() / num_workers
             blocks = [b.to(try_gpu()) for b in blocks]
             Stochastic_train(model, Loss, blocks, output_nodes, labels, opt)
             replaceModel(Models)
@@ -488,10 +488,10 @@ def run5(graph, labels, dataloader, split_idx, evaluator, num_epochs, Models, Lo
                     correct_step = min((s1/m) ** 0.5, s2/m)
                     correct_step = round(correct_step.item(), 0)
                     # correct_step = 0
-                    # print(f'correct_step: {correct_step}')
-                    # print(f's1: {s1}, s2: {s2}, m: {m}')
-                    # print(f'gradient_w1: {gradient_w1}, loss_w1: {loss_w1}, loss_w2: {loss_w2}, time_now: {time_now}')
-                    # print("---------------------")
+                    print(f'correct_step: {correct_step}')
+                    print(f's1: {s1}, s2: {s2}, m: {m}')
+                    print(f'gradient_w1: {gradient_w1}, loss_w1: {loss_w1}, loss_w2: {loss_w2}, time_now: {time_now}')
+                    print("---------------------")
                     gradient_w1, loss_w1, loss_w2 = 0, 0, 0
                 else:
                     cnt += 1
@@ -520,23 +520,24 @@ def run5(graph, labels, dataloader, split_idx, evaluator, num_epochs, Models, Lo
     pltx4.append(time_now4/60)
     return loss_list, train_list, valid_list, test_list, pltx, pltx2, pltx3, pltx4, overhead, iteration
 
-d_name = 'ogbn-products'
-dataset = DglNodePropPredDataset(name = d_name)
-evaluator = Evaluator(name = d_name)
-split_idx = dataset.get_idx_split()
-graph, labels = dataset[0]
+# d_name = 'ogbn-arxiv'
+# dataset = DglNodePropPredDataset(name = d_name)
+# evaluator = Evaluator(name = d_name)
+# split_idx = dataset.get_idx_split()
+# graph, labels = dataset[0]
 
-# dataset = RedditDataset()
-# evaluator = None
-# graph = dataset[0]
-# labels = graph.ndata['label'].reshape(-1, 1)
-# node_feature = graph.ndata['feat']
-# tmp = torch.arange(0, node_feature.shape[0])
-# split_idx = {'train': tmp[graph.ndata['train_mask']], 'valid': tmp[graph.ndata['val_mask']], 'test': tmp[graph.ndata['test_mask']]}
+dataset = RedditDataset()
+evaluator = None
+graph = dataset[0]
+labels = graph.ndata['label'].reshape(-1, 1)
+node_feature = graph.ndata['feat']
+tmp = torch.arange(0, node_feature.shape[0])
+split_idx = {'train': tmp[graph.ndata['train_mask']], 'valid': tmp[graph.ndata['val_mask']], 'test': tmp[graph.ndata['test_mask']]}
 
 graph.add_edges(*graph.all_edges()[::-1])
 graph = graph.remove_self_loop().add_self_loop()
 num_epochs, num_hidden, num_layers, dropout, lr = 500, 256, 2, 0.5, 0.005
+batch_size = 1024
 max_time = 60 * 1
 
 node_features = graph.ndata['feat']
@@ -551,8 +552,8 @@ Loss = F.nll_loss
 models, opts = [], []
 num_workers = 4
 for i in range(num_workers):
-    # models.append(StochasticSAGE(num_input, num_hidden, num_output, num_layers, dropout))
-    models.append(StochasticGATNet(num_input, num_hidden, num_output, num_layers, 4, dropout))
+    models.append(StochasticSAGE(num_input, num_hidden, num_output, num_layers, dropout))
+    # models.append(StochasticGATNet(num_input, num_hidden, num_output, num_layers, 4, dropout))
     opts.append(torch.optim.AdamW(models[i].parameters(), lr=lr))
 
 sampler = dgl.dataloading.MultiLayerNeighborSampler([15, 10])
@@ -560,7 +561,7 @@ sampler = dgl.dataloading.MultiLayerNeighborSampler([15, 10])
 dataloader = dgl.dataloading.DataLoader(
     graph, split_idx['train'], sampler,
     # batch_size = (node_features[split_idx['train']].shape[0] + num_workers - 1) // num_workers,
-    batch_size = 4080,
+    batch_size = batch_size,
     shuffle=True,
     drop_last=False,
     num_workers=0)
@@ -568,7 +569,7 @@ dataloader = dgl.dataloading.DataLoader(
 dataloader2 = dgl.dataloading.DataLoader(
     graph, split_idx['train'], sampler,
     # batch_size = (node_features[split_idx['train']].shape[0] + num_workers - 1) // num_workers,
-    batch_size = 4080*num_workers,
+    batch_size = batch_size*num_workers,
     shuffle=True,
     drop_last=False,
     num_workers=0)
@@ -624,100 +625,101 @@ sample_time = cal_sample_time(dataloader)
 print(f'sample_time: {sample_time}')
 print(f'compute_time: {compute_time}')
 
-plt.subplot(1, 2, 1)
-plt.xlabel('Wall-clock time(min)')
-plt.ylabel('loss')
-plt.subplot(1, 2, 2)
-plt.xlabel('Wall-clock time(min)')
-plt.ylabel('test_acc')
+# plt.subplot(1, 2, 1)
+# plt.xlabel('Wall-clock time(min)')
+# plt.ylabel('loss')
+# plt.subplot(1, 2, 2)
+# plt.xlabel('Wall-clock time(min)')
+# plt.ylabel('test_acc')
 
 file = open('./savedata/baselineTest.txt', mode = 'w')
 
-loss_list, train_list, valid_list, test_list, pltx, pltx2, pltx3, pltx4, overhead, iteration = run1(graph, labels, dataloader, split_idx, evaluator, num_epochs, models, Loss, opts, False)
-plt.subplot(1, 2, 1)
-plt.plot(pltx, loss_list)
-plt.subplot(1, 2, 2)
-plt.plot(pltx, test_list)
-file.write(str(loss_list)+'\n')
-file.write(str(test_list)+'\n')
-file.write(str(pltx)+'\n')
-file.write(str(pltx2)+'\n')
-file.write(str(pltx3)+'\n')
-file.write(str(pltx4)+'\n')
-file.write(str(overhead) + ' ' + str(iteration))
-for model in models:
-    model.reset_parameters()
-file.write('\n')
-print(f'------------(1):{test_list[-1]}------------')
+# loss_list, train_list, valid_list, test_list, pltx, pltx2, pltx3, pltx4, overhead, iteration = run1(graph, labels, dataloader, split_idx, evaluator, num_epochs, models, Loss, opts, False)
+# plt.subplot(1, 2, 1)
+# plt.plot(pltx, loss_list)
+# plt.subplot(1, 2, 2)
+# plt.plot(pltx, test_list)
+# file.write(str(loss_list)+'\n')
+# file.write(str(test_list)+'\n')
+# file.write(str(pltx)+'\n')
+# file.write(str(pltx2)+'\n')
+# file.write(str(pltx3)+'\n')
+# file.write(str(pltx4)+'\n')
+# file.write(str(overhead) + ' ' + str(iteration))
+# for model in models:
+#     model.reset_parameters()
+# file.write('\n')
+# print(f'------------(1):{test_list[-1]}------------')
 
-loss_list, train_list, valid_list, test_list, pltx, pltx2, pltx3, pltx4, overhead, iteration = run2(graph, labels, dataloader2, split_idx, evaluator, num_epochs, models, Loss, opts, False)
-plt.subplot(1, 2, 1)
-plt.plot(pltx, loss_list)
-plt.subplot(1, 2, 2)
-plt.plot(pltx, test_list)
-file.write(str(loss_list)+'\n')
-file.write(str(test_list)+'\n')
-file.write(str(pltx)+'\n')
-file.write(str(pltx2)+'\n')
-file.write(str(pltx3)+'\n')
-file.write(str(pltx4)+'\n')
-file.write(str(overhead) + ' ' + str(iteration))
-for model in models:
-    model.reset_parameters()
-file.write('\n')
-print(f'------------(2):{test_list[-1]}------------')
+# loss_list, train_list, valid_list, test_list, pltx, pltx2, pltx3, pltx4, overhead, iteration = run2(graph, labels, dataloader2, split_idx, evaluator, num_epochs, models, Loss, opts, False)
+# plt.subplot(1, 2, 1)
+# plt.plot(pltx, loss_list)
+# plt.subplot(1, 2, 2)
+# plt.plot(pltx, test_list)
+# file.write(str(loss_list)+'\n')
+# file.write(str(test_list)+'\n')
+# file.write(str(pltx)+'\n')
+# file.write(str(pltx2)+'\n')
+# file.write(str(pltx3)+'\n')
+# file.write(str(pltx4)+'\n')
+# file.write(str(overhead) + ' ' + str(iteration))
+# for model in models:
+#     model.reset_parameters()
+# file.write('\n')
+# print(f'------------(2):{test_list[-1]}------------')
 
-loss_list, train_list, valid_list, test_list, pltx, pltx2, pltx3, pltx4, overhead, iteration = run3(graph, labels, dataloader, split_idx, evaluator, num_epochs, models, Loss, opts, 8, False)
-plt.subplot(1, 2, 1)
-plt.plot(pltx, loss_list)
-plt.subplot(1, 2, 2)
-plt.plot(pltx, test_list)
-file.write(str(loss_list)+'\n')
-file.write(str(test_list)+'\n')
-file.write(str(pltx)+'\n')
-file.write(str(pltx2)+'\n')
-file.write(str(pltx3)+'\n')
-file.write(str(pltx4)+'\n')
-file.write(str(overhead) + ' ' + str(iteration))
-for model in models:
-    model.reset_parameters()
-file.write('\n')
-print(f'------------(3):{test_list[-1]}------------')
+# loss_list, train_list, valid_list, test_list, pltx, pltx2, pltx3, pltx4, overhead, iteration = run3(graph, labels, dataloader, split_idx, evaluator, num_epochs, models, Loss, opts, 8, False)
+# plt.subplot(1, 2, 1)
+# plt.plot(pltx, loss_list)
+# plt.subplot(1, 2, 2)
+# plt.plot(pltx, test_list)
+# file.write(str(loss_list)+'\n')
+# file.write(str(test_list)+'\n')
+# file.write(str(pltx)+'\n')
+# file.write(str(pltx2)+'\n')
+# file.write(str(pltx3)+'\n')
+# file.write(str(pltx4)+'\n')
+# file.write(str(overhead) + ' ' + str(iteration))
+# for model in models:
+#     model.reset_parameters()
+# file.write('\n')
+# print(f'------------(3):{test_list[-1]}------------')
 
-loss_list, train_list, valid_list, test_list, pltx, pltx2, pltx3, pltx4, overhead, iteration = run3(graph, labels, dataloader, split_idx, evaluator, num_epochs, models, Loss, opts, 128, False)
-plt.subplot(1, 2, 1)
-plt.plot(pltx, loss_list)
-plt.subplot(1, 2, 2)
-plt.plot(pltx, test_list)
-file.write(str(loss_list)+'\n')
-file.write(str(test_list)+'\n')
-file.write(str(pltx)+'\n')
-file.write(str(pltx2)+'\n')
-file.write(str(pltx3)+'\n')
-file.write(str(pltx4)+'\n')
-file.write(str(overhead) + ' ' + str(iteration))
-for model in models:
-    model.reset_parameters()
-file.write('\n')
-print(f'------------(4):{test_list[-1]}------------')
+# loss_list, train_list, valid_list, test_list, pltx, pltx2, pltx3, pltx4, overhead, iteration = run3(graph, labels, dataloader, split_idx, evaluator, num_epochs, models, Loss, opts, 128, False)
+# plt.subplot(1, 2, 1)
+# plt.plot(pltx, loss_list)
+# plt.subplot(1, 2, 2)
+# plt.plot(pltx, test_list)
+# file.write(str(loss_list)+'\n')
+# file.write(str(test_list)+'\n')
+# file.write(str(pltx)+'\n')
+# file.write(str(pltx2)+'\n')
+# file.write(str(pltx3)+'\n')
+# file.write(str(pltx4)+'\n')
+# file.write(str(overhead) + ' ' + str(iteration))
+# for model in models:
+#     model.reset_parameters()
+# file.write('\n')
+# print(f'------------(4):{test_list[-1]}------------')
 
-loss_list, train_list, valid_list, test_list, pltx, pltx2, pltx3, pltx4, overhead, iteration = run4(graph, labels, dataloader, split_idx, evaluator, num_epochs, models, Loss, opts, False)
-plt.subplot(1, 2, 1)
-plt.plot(pltx, loss_list)
-plt.subplot(1, 2, 2)
-plt.plot(pltx, test_list)
-file.write(str(loss_list)+'\n')
-file.write(str(test_list)+'\n')
-file.write(str(pltx)+'\n')
-file.write(str(pltx2)+'\n')
-file.write(str(pltx3)+'\n')
-file.write(str(pltx4)+'\n')
-file.write(str(overhead) + ' ' + str(iteration))
-for model in models:
-    model.reset_parameters()
-file.write('\n')
-print(f'------------(5):{test_list[-1]}------------')
+# loss_list, train_list, valid_list, test_list, pltx, pltx2, pltx3, pltx4, overhead, iteration = run4(graph, labels, dataloader, split_idx, evaluator, num_epochs, models, Loss, opts, False)
+# plt.subplot(1, 2, 1)
+# plt.plot(pltx, loss_list)
+# plt.subplot(1, 2, 2)
+# plt.plot(pltx, test_list)
+# file.write(str(loss_list)+'\n')
+# file.write(str(test_list)+'\n')
+# file.write(str(pltx)+'\n')
+# file.write(str(pltx2)+'\n')
+# file.write(str(pltx3)+'\n')
+# file.write(str(pltx4)+'\n')
+# file.write(str(overhead) + ' ' + str(iteration))
+# for model in models:
+#     model.reset_parameters()
+# file.write('\n')
+# print(f'------------(5):{test_list[-1]}------------')
 
+# lf = 0
 lf = cal_lf(labels, dataloader, models[0], Loss, opts[0])
 
 loss_list, train_list, valid_list, test_list, pltx, pltx2, pltx3, pltx4, overhead, iteration = run5(graph, labels, dataloader, split_idx, evaluator, num_epochs, models, Loss, opts, lr, False)
@@ -735,5 +737,5 @@ file.write(str(overhead) + ' ' + str(iteration))
 file.write('\n')
 print(f'------------(6):{test_list[-1]}------------')
 
-plt.legend(['baseline1', 'baseline2', 'baseline3(step=8)', 'baseline3(step=128)', 'baseline4', 'baseline5'])
-plt.savefig('./image/baselineTest1.jpg')
+# plt.legend(['baseline1', 'baseline2', 'baseline3(step=8)', 'baseline3(step=128)', 'baseline4', 'baseline5'])
+# plt.savefig('./image/baselineTest1.jpg')

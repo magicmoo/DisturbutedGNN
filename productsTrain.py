@@ -18,7 +18,7 @@ graph, labels = dataset[0]
 graph = graph.remove_self_loop().add_self_loop()
 
 
-num_epochs, num_hidden, num_layers, dropout, lr = 30, 256, 2, 0.5, 0.0005
+num_epochs, num_hidden, num_layers, dropout, lr = 30, 1024, 2, 0.5, 0.0005
 
 node_features = graph.ndata['feat']
 
