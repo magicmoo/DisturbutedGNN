@@ -2,4 +2,5 @@ dataset
 core
 image
 savedata
+output
 __pycache__
