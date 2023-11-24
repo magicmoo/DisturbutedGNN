@@ -520,19 +520,19 @@ def run5(graph, labels, dataloader, split_idx, evaluator, num_epochs, Models, Lo
     pltx4.append(time_now4/60)
     return loss_list, train_list, valid_list, test_list, pltx, pltx2, pltx3, pltx4, overhead, iteration
 
-# d_name = 'ogbn-arxiv'
-# dataset = DglNodePropPredDataset(name = d_name)
-# evaluator = Evaluator(name = d_name)
-# split_idx = dataset.get_idx_split()
-# graph, labels = dataset[0]
+d_name = 'ogbn-arxiv'
+dataset = DglNodePropPredDataset(name = d_name)
+evaluator = Evaluator(name = d_name)
+split_idx = dataset.get_idx_split()
+graph, labels = dataset[0]
 
-dataset = RedditDataset()
-evaluator = None
-graph = dataset[0]
-labels = graph.ndata['label'].reshape(-1, 1)
-node_feature = graph.ndata['feat']
-tmp = torch.arange(0, node_feature.shape[0])
-split_idx = {'train': tmp[graph.ndata['train_mask']], 'valid': tmp[graph.ndata['val_mask']], 'test': tmp[graph.ndata['test_mask']]}
+# dataset = RedditDataset()
+# evaluator = None
+# graph = dataset[0]
+# labels = graph.ndata['label'].reshape(-1, 1)
+# node_feature = graph.ndata['feat']
+# tmp = torch.arange(0, node_feature.shape[0])
+# split_idx = {'train': tmp[graph.ndata['train_mask']], 'valid': tmp[graph.ndata['val_mask']], 'test': tmp[graph.ndata['test_mask']]}
 
 graph.add_edges(*graph.all_edges()[::-1])
 graph = graph.remove_self_loop().add_self_loop()
