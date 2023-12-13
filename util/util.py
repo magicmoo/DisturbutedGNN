@@ -1,4 +1,5 @@
 import torch
+import time
 
 def try_gpu(i=0):  #@save
     if torch.cuda.device_count() >= i + 1:
@@ -71,15 +72,23 @@ def train(Model, Loss, graph, labels, train_idx, Opt):
     Model.train()
     Opt.zero_grad()
 
+    t1 = time.perf_counter()
+
     node_features = graph.ndata['feat']
     pred_labels = Model(graph, node_features)
     pred_train = pred_labels[train_idx]
     # train_output = nn.functional.one_hot(labels[train_idx], num_classes=pred_train.shape[-1]).squeeze()
     train_output = labels[train_idx].squeeze(1)
     loss = Loss(pred_train, train_output)
+
+    t2 = time.perf_counter()
     loss.backward()
     Opt.step()
     
+    t3 = time.perf_counter()
+
+    print(f'compute: {t2-t1}')
+    print(f'backward: {t3-t2}')
     return loss.item()
     
 def run_graph(graph, labels, split_idx, evaluator, num_epochs, Model, Loss, Opt, is_output=False):
@@ -89,6 +98,7 @@ def run_graph(graph, labels, split_idx, evaluator, num_epochs, Model, Loss, Opt,
     step = 10   # the step program output train's data
     for epoch in range(num_epochs):
         loss = train(Model, Loss, graph, labels, split_idx['train'], Opt)
+
         loss_list.append(loss)
         if is_output and (epoch+1)%(num_epochs//step) == 0:
             train_acc, valid_acc, test_acc = test(Model, graph, labels, split_idx, evaluator)

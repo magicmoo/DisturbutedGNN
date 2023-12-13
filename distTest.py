@@ -1,3 +1,4 @@
+import datetime
 from ogb.nodeproppred import DglNodePropPredDataset, Evaluator
 from util.model import StochasticSAGE, StochasticGATNet
 from util.multiWorker import multi_Stochastic_run_graph, replaceModel
@@ -44,7 +45,9 @@ def cal_loss2(labels, dataloader, Models, Loss, Opts):
     model, opt = Models[idx], Opts[idx]
     blocks = [b.to(device) for b in blocks]
     loss = cal_loss(model, Loss, blocks, output_nodes, labels)/num_workers
+    print('debug1')
     dist.all_reduce(loss, op=dist.ReduceOp.AVG)
+    print('debug2')
     return loss.item()
 
 def dist_run(graph, labels, dataloader, split_idx, evaluator, num_epochs, models, Loss, Opts, lr, is_output=False):
@@ -267,7 +270,7 @@ def cal_m(labels, dataloader, Models, Loss, Opts, split_list):
         gradients_full[i] /= num_workers
     return cal_norm(gradients_full)**2
 
-dist.init_process_group('nccl', init_method='env://')
+dist.init_process_group('nccl', init_method='tcp://www.gitd245.online:7002', timeout=datetime.timedelta(seconds=10), rank=0, world_size=2)
 rank = dist.get_rank()
 device = f'cuda:{rank}'
 local_rank = os.environ['LOCAL_RANK']

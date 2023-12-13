@@ -1,5 +1,6 @@
 from ogb.nodeproppred import DglNodePropPredDataset, Evaluator
-from util.util import SAGE, GATNet, try_gpu, run_graph
+from util.util import try_gpu, run_graph
+from util.model import SAGE, GATNet
 import torch
 import dgl
 import dgl.nn as dglnn
@@ -20,8 +21,8 @@ num_epochs, num_hidden, num_layers, dropout, lr = 500, 256, 3, 0.5, 0.005
 node_features = graph.ndata['feat']
 
 num_input, num_output = node_features.shape[1], int(labels.max().item()+1)
-Model = SAGE(num_input, num_hidden, num_output, num_layers, dropout, try_gpu())
-# Model = GATNet(num_input, num_hidden, num_output, num_layers, 4, dropout).to(util.try_gpu())
+Model = SAGE(num_input, num_hidden, num_output, num_layers, dropout).to(try_gpu())
+# Model = GATNet(num_input, num_hidden, num_output, num_layers, 4, dropout).to(try_gpu())
 Opt = torch.optim.AdamW(Model.parameters(), lr=lr)
 Loss = F.nll_loss
 

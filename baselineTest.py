@@ -10,7 +10,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import util.util as util
 import matplotlib.pyplot as plt
-from math import exp
 from dgl.data import RedditDataset
 
 def cal_parameter_size(model):
